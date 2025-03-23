@@ -2,6 +2,21 @@ from machine import Pin, I2C, ADC, SPI
 import utime as time
 import dht
 import framebuf
+import network
+from umqtt.simple import MQTTClient
+import json
+
+# WiFi Settings
+WIFI_SSID = "YOUR_WIFI_SSID"
+WIFI_PASSWORD = "YOUR_WIFI_PASSWORD"
+
+# MQTT Settings
+MQTT_BROKER = "YOUR_HOME_ASSISTANT_IP"
+MQTT_PORT = 1883
+MQTT_CLIENT_ID = "pico_plant_saver"
+MQTT_USER = "YOUR_MQTT_USERNAME"  # If you have MQTT authentication enabled
+MQTT_PASSWORD = "YOUR_MQTT_PASSWORD"  # If you have MQTT authentication enabled
+MQTT_TOPIC = "homeassistant/sensor/plant_saver"
 
 # Soil Moisture Sensor Setup
 adc = ADC(26)
@@ -108,6 +123,39 @@ oled = OLED_1inch3()
 oled.fill(0x0000)
 oled.show()
 
+# Connect to WiFi
+def connect_wifi():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    if not wlan.isconnected():
+        print('Connecting to WiFi...')
+        wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+        while not wlan.isconnected():
+            time.sleep(1)
+    print('WiFi connected!')
+    print('Network config:', wlan.ifconfig())
+
+# Initialize MQTT Client
+def connect_mqtt():
+    client = MQTTClient(MQTT_CLIENT_ID, MQTT_BROKER,
+                       port=MQTT_PORT,
+                       user=MQTT_USER,
+                       password=MQTT_PASSWORD,
+                       keepalive=30)
+    client.connect()
+    return client
+
+# Connect to WiFi
+connect_wifi()
+
+# Connect to MQTT
+try:
+    mqtt_client = connect_mqtt()
+    print("Connected to MQTT broker")
+except Exception as e:
+    print("Could not connect to MQTT broker:", e)
+    mqtt_client = None
+
 # Main loop
 while True:
     try:
@@ -128,6 +176,24 @@ while True:
         oled.text("Temp: {}C".format(t), 0, 20, oled.white)
         oled.text("Humidity: {}%".format(h), 0, 40, oled.white)
         oled.show()
+        
+        # Send data to Home Assistant via MQTT
+        if mqtt_client:
+            sensor_data = {
+                "moisture": round(moisture, 1),
+                "temperature": t,
+                "humidity": h
+            }
+            try:
+                mqtt_client.publish(MQTT_TOPIC, json.dumps(sensor_data))
+                print("Data sent to Home Assistant")
+            except Exception as e:
+                print("Failed to publish MQTT message:", e)
+                # Try to reconnect
+                try:
+                    mqtt_client = connect_mqtt()
+                except:
+                    pass
         
         # Wait before next reading
         time.sleep(5)
