@@ -1,6 +1,6 @@
 from machine import Pin, I2C, ADC, SPI
 import utime as time
-from dht import DHT11, InvalidChecksum
+import dht
 import framebuf
 
 # Soil Moisture Sensor Setup
@@ -9,7 +9,7 @@ conversion_factor = 100 / (65535)
 
 # DHT11 Sensor Setup
 dht_pin = Pin(28, Pin.OUT, Pin.PULL_DOWN)
-dht_sensor = DHT11(dht_pin)
+dht_sensor = dht.DHT11(dht_pin)
 
 # OLED Display Setup
 DC = 8
@@ -116,8 +116,9 @@ while True:
         print("Moisture: ", round(moisture, 1), "%")
         
         # Read temperature and humidity
-        t = dht_sensor.temperature
-        h = dht_sensor.humidity
+        dht_sensor.measure()
+        t = dht_sensor.temperature()
+        h = dht_sensor.humidity()
         print("Temperature: {}°C".format(t))
         print("Humidity: {}%".format(h))
         
